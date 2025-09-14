@@ -1,0 +1,11 @@
+node_modules/
+dist/
+build/
+.out/
+.expo/
+.expo-shared/
+.env
+.env.*
+npm-debug.log*
+yarn.lock
+pnpm-lock.yaml
