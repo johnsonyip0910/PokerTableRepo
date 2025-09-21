@@ -1,0 +1,8 @@
+{
+  "appId": "co.poker.table",
+  "appName": "PokerTable",
+  "webDir": "build",
+  "server": {
+    "androidScheme": "https"
+  }
+}
