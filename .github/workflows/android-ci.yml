@@ -1,0 +1,55 @@
+name: Android CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    # 用 Node 18（可與 Vite 相容）
+    - name: Setup Node
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+
+    # 安裝與建置前端，產出到 build/（Capacitor 會用到）
+    - name: Install deps
+      run: npm ci
+    - name: Build web
+      run: npm run build
+
+    # 同步 Capacitor 到 Android 專案（需要有 android/ 目錄）
+    - name: Sync Capacitor Android
+      run: npx cap sync android
+
+    # 用 JDK 17（Gradle 8/AGP 新版較相容）
+    - name: Setup JDK
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+        cache: gradle
+
+    - name: Grant execute permission for gradlew
+      run: chmod +x android/gradlew
+
+    # 組建 Debug APK
+    - name: Assemble Debug
+      working-directory: android
+      run: ./gradlew assembleDebug
+
+    # 上傳 APK 成為 Artifact（這一步很關鍵，沒有這段就不會有下載）
+    - name: Upload APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: app-debug-apk
+        path: android/app/build/outputs/apk/debug/app-debug.apk
