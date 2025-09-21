@@ -7,53 +7,47 @@ on:
     branches: [ "main" ]
 
 jobs:
-  build:
+  android:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v4
+    - name: Checkout
+      uses: actions/checkout@v4
 
-    # Node 20 係 Capacitor 7 的最低需求
-    - name: Setup Node.js (v20)
+    - name: Setup Node 20
       uses: actions/setup-node@v4
       with:
         node-version: 20
+        cache: 'npm'
 
     - name: Install deps (frontend)
-      run: npm ci
+      run: npm ci --no-audit
 
-    - name: Install Capacitor packages
-      run: |
-        npm i -D @capacitor/cli@latest
-        npm i @capacitor/core@latest @capacitor/android@latest
-
-    # Vite/前端 Build（請確保 Vite 輸出夾同 capacitor.config 的 webDir 一致）
-    - name: Build web
+    - name: Build web (Vite)
       run: npm run build
 
-    # 如 repo 未 commit android/，在 CI 內動態新增平台
-    - name: Add Android platform (if missing)
-      run: npx cap add android || echo "android already added"
-
-    - name: Sync Capacitor
-      run: npx cap sync android
-
-    # 用 JDK 17 跑 Gradle
-    - name: Setup JDK 17
+    - name: Setup Java 17
       uses: actions/setup-java@v4
       with:
-        java-version: '17'
         distribution: 'temurin'
-        cache: gradle
+        java-version: '17'
+        cache: 'gradle'
+
+    - name: Install Capacitor CLI (local)
+      run: npm i -D @capacitor/cli@latest
+
+    - name: Sync Capacitor Android
+      run: npx cap sync android
 
     - name: Grant execute permission for gradlew
       run: chmod +x android/gradlew
 
-    - name: Build Debug APK
-      run: cd android && ./gradlew assembleDebug
+    - name: Assemble Debug APK
+      working-directory: android
+      run: ./gradlew assembleDebug
 
-    - name: Upload APK Artifact
+    - name: Upload APK artifact
       uses: actions/upload-artifact@v4
       with:
         name: app-debug-apk
-        path: android/app/build/outputs/apk/debug/app-debug.apk
+        path: android/app/build/outputs/apk/debug/*.apk
