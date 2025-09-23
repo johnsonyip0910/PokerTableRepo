@@ -1,0 +1,75 @@
+name: iOS CI (Simulator Build)
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  build-ios-sim:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install deps (npm ci fallback to npm i)
+        run: |
+          npm ci || npm install
+
+      - name: Build Web (Vite)
+        run: npm run build
+
+      - name: Ensure Capacitor CLI
+        run: npm i -D @capacitor/cli @capacitor/core
+
+      - name: Add iOS platform if missing
+        run: |
+          if [ ! -d "ios" ]; then
+            npx cap add ios
+          fi
+
+      - name: Sync Capacitor iOS
+        run: npx cap sync ios
+
+      - name: Build iOS Simulator .app (no codesign)
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd ios/App
+          SCHEME="App"
+
+          # 決定用 workspace 還是 project
+          if [ -f "App.xcworkspace/contents.xcworkspacedata" ]; then
+            XCODE_TARGET='-workspace App.xcworkspace'
+          else
+            XCODE_TARGET='-project App.xcodeproj'
+          fi
+
+          # 以模擬器 SDK 建置，並禁用簽名
+          xcodebuild $XCODE_TARGET -scheme "$SCHEME" -configuration Debug -sdk iphonesimulator \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGNING_IDENTITY="" \
+            -derivedDataPath build
+
+          # 將 .app 打包成 zip 放到固定路徑供 Artifact 上傳
+          APP_PATH=$(find build/Build/Products/Debug-iphonesimulator -maxdepth 1 -name "*.app" | head -n 1)
+          if [ -z "$APP_PATH" ]; then
+            echo "❌ 找不到 .app 輸出，請到 Actions logs 檢查 xcodebuild 輸出。"
+            exit 1
+          fi
+          cd "$(dirname "$APP_PATH")"
+          zip -r app-simulator.zip "$(basename "$APP_PATH")"
+          mkdir -p "$GITHUB_WORKSPACE/artifacts"
+          mv app-simulator.zip "$GITHUB_WORKSPACE/artifacts/"
+
+      - name: Upload artifact (app-simulator.zip)
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-simulator
+          path: artifacts/app-simulator.zip
