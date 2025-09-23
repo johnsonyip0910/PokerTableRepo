@@ -45,85 +45,52 @@ jobs:
       - name: Sync Capacitor iOS
         run: npx cap sync ios
 
-      - name: Detect iOS app subdir & scheme
+      - name: Detect iOS subdir / target / scheme
         id: detect
         shell: bash
         run: |
           set -euo pipefail
-          APP_SUBDIR=""
-          if [ -d "ios/App" ]; then
-            APP_SUBDIR="App"
-          else
-            XC=$(find ios -maxdepth 2 -type d -name "*.xcodeproj" | head -n 1 || true)
-            if [ -n "$XC" ]; then
-              APP_SUBDIR=$(basename "$(dirname "$XC")")
+          APP_SUBDIR="App"
+          # 若 ios/App 不存在，嘗試找含 .xcodeproj 的資料夾，否則取第一個子夾
+          if [ ! -d "ios/$APP_SUBDIR" ]; then
+            CANDIDATE=$(find ios -maxdepth 2 -type d -name "*.xcodeproj" | head -n 1 || true)
+            if [ -n "$CANDIDATE" ]; then
+              APP_SUBDIR=$(basename "$(dirname "$CANDIDATE")")
             else
-              APP_SUBDIR=$(ls -1d ios/*/ | head -n 1 | xargs -I{} basename "{}")
+              APP_SUBDIR=$(ls -1d ios/*/ 2>/dev/null | head -n 1 | xargs -I{} basename "{}")
             fi
           fi
           if [ -z "$APP_SUBDIR" ]; then
             echo "❌ 無法偵測 iOS App 子資料夾（ios/*）"
             exit 1
           fi
-          echo "APP_SUBDIR=$APP_SUBDIR" | tee -a "$GITHUB_OUTPUT"
-
           cd "ios/$APP_SUBDIR"
+
           if [ -f "App.xcworkspace/contents.xcworkspacedata" ]; then
-            echo "XCODE_TARGET=-workspace App.xcworkspace" | tee -a "$GITHUB_OUTPUT"
+            XCODE_TARGET='-workspace App.xcworkspace'
           else
-            echo "XCODE_TARGET=-project App.xcodeproj" | tee -a "$GITHUB_OUTPUT"
+            XCODE_TARGET='-project App.xcodeproj'
           fi
 
-          SCHEME=$(xcodebuild -list -json $(echo "${{ steps.detect.outputs.XCODE_TARGET:- -project App.xcodeproj }}") 2>/dev/null | python3 - <<'PY'
-import sys, json
-try:
-  d = json.load(sys.stdin)
-  for k in ("workspace","project"):
-    if k in d and "schemes" in d[k] and d[k]["schemes"]:
-      print(d[k]["schemes"][0])
-      break
-  else:
-    print("App")
-except Exception:
-  print("App")
-PY
-)
-          echo "SCHEME=$SCHEME" | tee -a "$GITHUB_OUTPUT"
-
-      - name: (Safety) strip CR from tracked files
-        shell: bash
-        run: |
-          git ls-files -z | xargs -0 -I{} bash -lc 'sed -i $'\''s/\r$//'\'' "{}" || true'
-          echo "Stripped CR from tracked files (if any)."
-
-      - name: Pod install if workspace exists
-        shell: bash
-        run: |
-          set -e
-          cd "ios/${{ steps.detect.outputs.APP_SUBDIR }}"
-          if [ -f "App.xcworkspace/contents.xcworkspacedata" ]; then
-            pod install --repo-update
-          else
-            echo "No workspace detected; skip pods."
-          fi
+          SCHEME=$(xcodebuild -list -json $XCODE_TARGET 2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin); s=(d.get('workspace',{}).get('schemes') or d.get('project',{}).get('schemes') or []); print(s[0] if s else 'App')")
+          echo "APP_SUBDIR=$APP_SUBDIR" >> "$GITHUB_OUTPUT"
+          echo "XCODE_TARGET=$XCODE_TARGET" >> "$GITHUB_OUTPUT"
+          echo "SCHEME=$SCHEME" >> "$GITHUB_OUTPUT"
+          echo "Detected: APP_SUBDIR=$APP_SUBDIR, $XCODE_TARGET, SCHEME=$SCHEME"
 
       - name: Build iOS Simulator .app (no codesign)
         shell: bash
         run: |
-          # IMPORTANT: do NOT use `set -u` because CRLF may corrupt names; use safe defaults instead
+          # 不用 set -u，避免 CRLF/不可見字元令未設變數即爆；用安全預設代替
           set -eo pipefail
 
-          WEB_DIR="${WEB_DIR:-dist}"
+          WEB_DIR="${WEB_DIR:-dist}"  # 如你的 webDir 非 dist，改呢個
           APP_SUBDIR="${{ steps.detect.outputs.APP_SUBDIR }}"
           SCHEME="${{ steps.detect.outputs.SCHEME }}"
           XCODE_TARGET="${{ steps.detect.outputs.XCODE_TARGET }}"
 
-          printf 'Using WEB_DIR=%s\n' "$WEB_DIR"
-          printf 'Using APP_SUBDIR=%s, SCHEME=%s, XCODE_TARGET=%s\n' "$APP_SUBDIR" "$SCHEME" "$XCODE_TARGET"
-
-          if [ ! -d "$WEB_DIR" ]; then
-            echo "⚠️  注意：找不到 $WEB_DIR。請確認前端 build 產物資料夾同 capacitor.config 的 webDir 一致。"
-          fi
+          echo "Using WEB_DIR=$WEB_DIR"
+          [ ! -d "$WEB_DIR" ] && echo "⚠️  找不到 $WEB_DIR；請確認 webDir 與 build 產物一致。"
 
           cd "ios/$APP_SUBDIR"
 
