@@ -1,4 +1,4 @@
-* text=auto eol=lf
-*.bat text eol=crlf
-*.cmd text eol=crlf
-*.ps1 text eol=crlf
+# Enforce LF for GitHub Actions workflows & shell
+.github/workflows/*.yml text eol=lf
+*.yml text eol=lf
+*.sh text eol=lf

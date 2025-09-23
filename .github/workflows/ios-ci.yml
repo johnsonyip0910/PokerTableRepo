@@ -45,40 +45,89 @@ jobs:
       - name: Sync Capacitor iOS
         run: npx cap sync ios
 
-      - name: Sanity check shell & endings
+      - name: Detect iOS app subdir & scheme
+        id: detect
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP_SUBDIR=""
+          if [ -d "ios/App" ]; then
+            APP_SUBDIR="App"
+          else
+            XC=$(find ios -maxdepth 2 -type d -name "*.xcodeproj" | head -n 1 || true)
+            if [ -n "$XC" ]; then
+              APP_SUBDIR=$(basename "$(dirname "$XC")")
+            else
+              APP_SUBDIR=$(ls -1d ios/*/ | head -n 1 | xargs -I{} basename "{}")
+            fi
+          fi
+          if [ -z "$APP_SUBDIR" ]; then
+            echo "❌ 無法偵測 iOS App 子資料夾（ios/*）"
+            exit 1
+          fi
+          echo "APP_SUBDIR=$APP_SUBDIR" | tee -a "$GITHUB_OUTPUT"
+
+          cd "ios/$APP_SUBDIR"
+          if [ -f "App.xcworkspace/contents.xcworkspacedata" ]; then
+            echo "XCODE_TARGET=-workspace App.xcworkspace" | tee -a "$GITHUB_OUTPUT"
+          else
+            echo "XCODE_TARGET=-project App.xcodeproj" | tee -a "$GITHUB_OUTPUT"
+          fi
+
+          SCHEME=$(xcodebuild -list -json $(echo "${{ steps.detect.outputs.XCODE_TARGET:- -project App.xcodeproj }}") 2>/dev/null | python3 - <<'PY'
+import sys, json
+try:
+  d = json.load(sys.stdin)
+  for k in ("workspace","project"):
+    if k in d and "schemes" in d[k] and d[k]["schemes"]:
+      print(d[k]["schemes"][0])
+      break
+  else:
+    print("App")
+except Exception:
+  print("App")
+PY
+)
+          echo "SCHEME=$SCHEME" | tee -a "$GITHUB_OUTPUT"
+
+      - name: (Safety) strip CR from tracked files
+        shell: bash
+        run: |
+          git ls-files -z | xargs -0 -I{} bash -lc 'sed -i $'\''s/\r$//'\'' "{}" || true'
+          echo "Stripped CR from tracked files (if any)."
+
+      - name: Pod install if workspace exists
         shell: bash
         run: |
           set -e
-          echo "Bash: $(bash --version | head -n1)"
-          printf "Git working tree files with CRLF (should be none):\n"
-          git ls-files -z | xargs -0 -I{} bash -lc 'file "{}"' | grep -E "CRLF|CR line" || true
+          cd "ios/${{ steps.detect.outputs.APP_SUBDIR }}"
+          if [ -f "App.xcworkspace/contents.xcworkspacedata" ]; then
+            pod install --repo-update
+          else
+            echo "No workspace detected; skip pods."
+          fi
 
       - name: Build iOS Simulator .app (no codesign)
         shell: bash
         run: |
-          # 不依賴外層 env，先定義本地變數，再開 -u
+          # IMPORTANT: do NOT use `set -u` because CRLF may corrupt names; use safe defaults instead
           set -eo pipefail
-          WEB_DIR="dist"          # 如你的 webDir 非 dist，改呢個
-          IOS_APP_SUBDIR="App"    # ios/ 子資料夾名（Capacitor 預設 App）
-          IOS_SCHEME="App"        # Xcode scheme 名
-          set -u
 
-          printf 'Using WEB_DIR=%s, IOS_APP_SUBDIR=%s, IOS_SCHEME=%s\n' "$WEB_DIR" "$IOS_APP_SUBDIR" "$IOS_SCHEME"
+          WEB_DIR="${WEB_DIR:-dist}"
+          APP_SUBDIR="${{ steps.detect.outputs.APP_SUBDIR }}"
+          SCHEME="${{ steps.detect.outputs.SCHEME }}"
+          XCODE_TARGET="${{ steps.detect.outputs.XCODE_TARGET }}"
+
+          printf 'Using WEB_DIR=%s\n' "$WEB_DIR"
+          printf 'Using APP_SUBDIR=%s, SCHEME=%s, XCODE_TARGET=%s\n' "$APP_SUBDIR" "$SCHEME" "$XCODE_TARGET"
 
           if [ ! -d "$WEB_DIR" ]; then
             echo "⚠️  注意：找不到 $WEB_DIR。請確認前端 build 產物資料夾同 capacitor.config 的 webDir 一致。"
           fi
 
-          cd "ios/$IOS_APP_SUBDIR"
+          cd "ios/$APP_SUBDIR"
 
-          # 使用 workspace 或 project
-          if [ -f "App.xcworkspace/contents.xcworkspacedata" ]; then
-            XCODE_TARGET='-workspace App.xcworkspace'
-          else
-            XCODE_TARGET='-project App.xcodeproj'
-          fi
-
-          xcodebuild $XCODE_TARGET -scheme "$IOS_SCHEME" -configuration Debug -sdk iphonesimulator \
+          xcodebuild $XCODE_TARGET -scheme "$SCHEME" -configuration Debug -sdk iphonesimulator \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGNING_IDENTITY="" \
             -derivedDataPath build
 
