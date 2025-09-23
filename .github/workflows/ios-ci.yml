@@ -45,22 +45,25 @@ jobs:
       - name: Sync Capacitor iOS
         run: npx cap sync ios
 
-      # （如需要 pods，可取消下一步註解）
-      # - name: Pod install
-      #   shell: bash
-      #   run: |
-      #     cd ios/App
-      #     pod install --repo-update
+      - name: Sanity check shell & endings
+        shell: bash
+        run: |
+          set -e
+          echo "Bash: $(bash --version | head -n1)"
+          printf "Git working tree files with CRLF (should be none):\n"
+          git ls-files -z | xargs -0 -I{} bash -lc 'file "{}"' | grep -E "CRLF|CR line" || true
 
       - name: Build iOS Simulator .app (no codesign)
         shell: bash
         run: |
-          # 先設本地預設，再開 -u，避免外層 env 未設導致 unbound variable
+          # 不依賴外層 env，先定義本地變數，再開 -u
           set -eo pipefail
           WEB_DIR="dist"          # 如你的 webDir 非 dist，改呢個
           IOS_APP_SUBDIR="App"    # ios/ 子資料夾名（Capacitor 預設 App）
           IOS_SCHEME="App"        # Xcode scheme 名
           set -u
+
+          printf 'Using WEB_DIR=%s, IOS_APP_SUBDIR=%s, IOS_SCHEME=%s\n' "$WEB_DIR" "$IOS_APP_SUBDIR" "$IOS_SCHEME"
 
           if [ ! -d "$WEB_DIR" ]; then
             echo "⚠️  注意：找不到 $WEB_DIR。請確認前端 build 產物資料夾同 capacitor.config 的 webDir 一致。"
