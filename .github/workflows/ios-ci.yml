@@ -2,11 +2,96 @@ name: iOS CI (Simulator Build)
 
 on:
   push:
-    branches: ["main"]
   pull_request:
-    branches: ["main"]
+  workflow_dispatch:
+
 jobs:
   build-ios-sim:
     runs-on: macos-latest
 
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "npm"
+
+      - name: Install deps (npm ci fallback)
+        run: |
+          if [ -f "package-lock.json" ]; then
+            npm ci || npm install
+          else
+            npm install
+          fi
+
+      - name: Build Web (Vite)
+        run: npm run build
+
+      - name: Ensure Capacitor deps
+        run: npm i @capacitor/cli @capacitor/core
+
+      - name: Install Capacitor iOS platform
+        run: npm i -D @capacitor/ios
+
+      - name: Add iOS platform if missing
+        run: |
+          if [ ! -d "ios" ]; then
+            npx cap add ios
+          fi
+
+      - name: Sync Capacitor iOS
+        run: npx cap sync ios
+
+      # （如需要 pods，可取消下一步註解）
+      # - name: Pod install
+      #   shell: bash
+      #   run: |
+      #     cd ios/App
+      #     pod install --repo-update
+
+      - name: Build iOS Simulator .app (no codesign)
+        shell: bash
+        run: |
+          # 先設本地預設，再開 -u，避免外層 env 未設導致 unbound variable
+          set -eo pipefail
+          WEB_DIR="dist"          # 如你的 webDir 非 dist，改呢個
+          IOS_APP_SUBDIR="App"    # ios/ 子資料夾名（Capacitor 預設 App）
+          IOS_SCHEME="App"        # Xcode scheme 名
+          set -u
+
+          if [ ! -d "$WEB_DIR" ]; then
+            echo "⚠️  注意：找不到 $WEB_DIR。請確認前端 build 產物資料夾同 capacitor.config 的 webDir 一致。"
+          fi
+
+          cd "ios/$IOS_APP_SUBDIR"
+
+          # 使用 workspace 或 project
+          if [ -f "App.xcworkspace/contents.xcworkspacedata" ]; then
+            XCODE_TARGET='-workspace App.xcworkspace'
+          else
+            XCODE_TARGET='-project App.xcodeproj'
+          fi
+
+          xcodebuild $XCODE_TARGET -scheme "$IOS_SCHEME" -configuration Debug -sdk iphonesimulator \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGNING_IDENTITY="" \
+            -derivedDataPath build
+
+          APP_PATH=$(find build/Build/Products/Debug-iphonesimulator -maxdepth 1 -name "*.app" | head -n 1)
+          if [ -z "$APP_PATH" ]; then
+            echo "❌ 找不到 .app 輸出，請檢查 xcodebuild 日誌。"
+            exit 1
+          fi
+
+          cd "$(dirname "$APP_PATH")"
+          zip -r app-simulator.zip "$(basename "$APP_PATH")"
+          mkdir -p "$GITHUB_WORKSPACE/artifacts"
+          mv app-simulator.zip "$GITHUB_WORKSPACE/artifacts/"
+
+      - name: Upload artifact (app-simulator.zip)
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-simulator
+          path: artifacts/app-simulator.zip
