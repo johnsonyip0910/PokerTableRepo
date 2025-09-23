@@ -14,6 +14,10 @@ env:
 jobs:
   build-ios-sim:
     runs-on: macos-latest
+    env:
+      IOS_SCHEME: "App"
+      IOS_APP_SUBDIR: "App"
+      WEB_BUILD_DIR: "dist"
 
     steps:
       - name: Checkout
@@ -93,3 +97,4 @@ jobs:
         with:
           name: app-simulator
           path: artifacts/app-simulator.zip
+
