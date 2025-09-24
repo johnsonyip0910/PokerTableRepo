@@ -34,15 +34,6 @@ jobs:
       - name: Install EAS CLI
         run: npm i -g eas-cli
 
-      - name: Expo login (EAS_TOKEN)
-        env:
-          EAS_TOKEN: ${{ secrets.EAS_TOKEN }}
-        run: |
-          if [ -z "$EAS_TOKEN" ]; then
-            echo "❌ Missing EAS_TOKEN secret"; exit 1
-          fi
-          echo "OK"
-
       - name: Build iOS (.ipa) via EAS (wait)
         run: |
           PROFILE="${{ github.event.inputs.profile || 'preview' }}"
