@@ -1,0 +1,78 @@
+name: iOS IPA (EAS Build → Firebase)
+
+on:
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: "EAS profile (preview|production)"
+        required: true
+        default: "preview"
+  push:
+    branches: [ "main" ]
+
+jobs:
+  build-ipa-eas:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "npm"
+
+      - name: Install deps
+        run: |
+          if [ -f "package-lock.json" ]; then
+            npm ci || npm install
+          else
+            npm install
+          fi
+
+      - name: Install EAS CLI
+        run: npm i -g eas-cli
+
+      - name: Expo login (EAS_TOKEN)
+        env:
+          EAS_TOKEN: ${{ secrets.EAS_TOKEN }}
+        run: |
+          if [ -z "$EAS_TOKEN" ]; then
+            echo "❌ Missing EAS_TOKEN secret"; exit 1
+          fi
+          echo "OK"
+
+      - name: Build iOS (.ipa) via EAS (wait)
+        run: |
+          PROFILE="${{ github.event.inputs.profile || 'preview' }}"
+          echo "Using EAS profile: $PROFILE"
+          eas build --platform ios --profile "$PROFILE" --non-interactive --wait
+          URL=$(eas build:list --limit=1 --platform=ios --json | node -e "const r=JSON.parse(require('fs').readFileSync(0,'utf8'));console.log(r[0]?.artifacts?.buildUrl||'');")
+          if [ -z "$URL" ]; then
+            echo "❌ 無法取得 EAS 產物 URL"; exit 1
+          fi
+          echo "Artifact: $URL"
+          mkdir -p artifacts
+          curl -L "$URL" -o artifacts/app-ios-eas.ipa
+
+      - name: Upload to Firebase App Distribution (token)
+        if: ${{ secrets.FIREBASE_APP_ID_IOS != '' && secrets.FIREBASE_TOKEN != '' }}
+        env:
+          FIREBASE_APP_ID_IOS: ${{ secrets.FIREBASE_APP_ID_IOS }}
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+          FIREBASE_GROUPS: ${{ secrets.FIREBASE_GROUPS }}
+          FIREBASE_TESTERS: ${{ secrets.FIREBASE_TESTERS }}
+        run: |
+          npm i -g firebase-tools
+          firebase --version
+          firebase appdistribution:distribute artifacts/app-ios-eas.ipa \
+            --app "$FIREBASE_APP_ID_IOS" \
+            ${FIREBASE_GROUPS:+--groups "$FIREBASE_GROUPS"} \
+            ${FIREBASE_TESTERS:+--testers "$FIREBASE_TESTERS"}
+
+      - name: Upload artifact (.ipa)
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-ipa-eas
+          path: artifacts/app-ios-eas.ipa
