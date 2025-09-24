@@ -14,7 +14,7 @@ jobs:
   build-ipa-eas:
     runs-on: ubuntu-latest
     env:
-      EXPO_TOKEN: ${{ secrets.EAS_TOKEN }}
+      EXPO_TOKEN: ${{ secrets.EAS_TOKEN }}  # Expo/EAS 需要的 token
 
     steps:
       - name: Checkout
@@ -78,8 +78,10 @@ jobs:
         with:
           name: ios-ipa-eas
           path: artifacts/app-ios-eas.ipa
+
       - name: Debug: show workflow with line numbers
         if: always()
         shell: bash
         run: |
+          echo "----- Workflow (first 200 lines) -----"
           nl -ba .github/workflows/ios-ipa-eas.yml | sed -n '1,200p'
