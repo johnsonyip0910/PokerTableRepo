@@ -78,8 +78,8 @@ jobs:
         with:
           name: ios-ipa-eas
           path: artifacts/app-ios-eas.ipa
-
       - name: Debug: show workflow with line numbers
         if: always()
+        shell: bash
         run: |
           nl -ba .github/workflows/ios-ipa-eas.yml | sed -n '1,200p'
