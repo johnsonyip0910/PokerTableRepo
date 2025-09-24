@@ -1,0 +1,33 @@
+{
+  "expo": {
+    "name": "LivePokerClub",
+    "slug": "livepokerclub",
+    "version": "1.0.0",
+
+    "ios": {
+      "bundleIdentifier": "live.pokerclub.livepokerclub",
+      "buildNumber": "1",
+      "supportsTablet": true
+    },
+
+    "android": {
+      "package": "live.pokerclub.livepokerclub",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#FFFFFF"
+      }
+    },
+
+    "scheme": "livepokerclub",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#FFFFFF"
+    },
+    "updates": { "fallbackToCacheTimeout": 0 },
+    "assetBundlePatterns": ["**/*"]
+  }
+}
