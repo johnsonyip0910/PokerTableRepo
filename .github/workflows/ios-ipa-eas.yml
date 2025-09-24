@@ -57,7 +57,6 @@ jobs:
           curl -L "$URL" -o artifacts/app-ios-eas.ipa
 
       - name: Upload to Firebase App Distribution (token)
-        if: ${{ secrets.FIREBASE_APP_ID_IOS != '' && secrets.FIREBASE_TOKEN != '' }}
         env:
           FIREBASE_APP_ID_IOS: ${{ secrets.FIREBASE_APP_ID_IOS }}
           FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
