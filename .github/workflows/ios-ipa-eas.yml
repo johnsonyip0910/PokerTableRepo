@@ -13,6 +13,9 @@ on:
 jobs:
   build-ipa-eas:
     runs-on: ubuntu-latest
+    env:
+      EXPO_TOKEN: ${{ secrets.EAS_TOKEN }}
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -35,14 +38,14 @@ jobs:
         run: npm i -g eas-cli
 
       - name: Verify EXPO_TOKEN present
-  run: |
-    if [ -z "${EXPO_TOKEN:-}" ]; then
-      echo "❌ EXPO_TOKEN is missing. Please set EAS_TOKEN secret.";
-      exit 1
-    fi
-    echo "✅ EXPO_TOKEN is set (value hidden)."
+        run: |
+          if [ -z "${EXPO_TOKEN:-}" ]; then
+            echo "❌ EXPO_TOKEN is missing. Please set EAS_TOKEN secret."
+            exit 1
+          fi
+          echo "✅ EXPO_TOKEN is set (value hidden)."
 
-- name: Build iOS (.ipa) via EAS (wait)
+      - name: Build iOS (.ipa) via EAS (wait)
         run: |
           PROFILE="${{ github.event.inputs.profile || 'preview' }}"
           echo "Using EAS profile: $PROFILE"
@@ -75,3 +78,8 @@ jobs:
         with:
           name: ios-ipa-eas
           path: artifacts/app-ios-eas.ipa
+
+      - name: Debug: show workflow with line numbers
+        if: always()
+        run: |
+          nl -ba .github/workflows/ios-ipa-eas.yml | sed -n '1,200p'
