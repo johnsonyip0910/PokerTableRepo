@@ -1,10 +1,10 @@
 {
   "build": {
     "production": {
-      "autoIncrement": "buildNumber",
       "ios": {
         "resourceClass": "m-medium"
-      }
+      },
+      "autoIncrement": true
     },
     "preview": {
       "ios": {
