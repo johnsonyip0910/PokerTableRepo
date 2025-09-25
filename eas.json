@@ -1,0 +1,18 @@
+{
+  "build": {
+    "production": {
+      "autoIncrement": "buildNumber",
+      "ios": {
+        "resourceClass": "m-medium"
+      }
+    },
+    "preview": {
+      "ios": {
+        "resourceClass": "m-medium"
+      }
+    }
+  },
+  "cli": {
+    "version": ">= 7.0.0"
+  }
+}

@@ -3,13 +3,11 @@
     "name": "LivePokerClub",
     "slug": "livepokerclub",
     "version": "1.0.0",
-
     "ios": {
       "bundleIdentifier": "live.pokerclub.livepokerclub",
       "buildNumber": "1",
       "supportsTablet": true
     },
-
     "android": {
       "package": "live.pokerclub.livepokerclub",
       "versionCode": 1,
@@ -18,7 +16,6 @@
         "backgroundColor": "#FFFFFF"
       }
     },
-
     "scheme": "livepokerclub",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -27,7 +24,17 @@
       "resizeMode": "contain",
       "backgroundColor": "#FFFFFF"
     },
-    "updates": { "fallbackToCacheTimeout": 0 },
-    "assetBundlePatterns": ["**/*"]
+    "updates": {
+      "fallbackToCacheTimeout": 0
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "857a9c94-e43f-4255-a2e5-01536c931f0c"
+      }
+    },
+    "owner": "johnsonyip"
   }
 }
