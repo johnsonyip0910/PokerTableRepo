@@ -58,7 +58,6 @@ jobs:
         run: |
           AAB="android/app/build/outputs/bundle/release/app-release.aab"
           test -f "$AAB" || (echo "❌ 未找到 $AAB"; exit 1)
-          # 簽名至新檔（避免覆蓋原檔）
           jarsigner -keystore android/app/keystore/upload.keystore -storepass "$STORE_PWD" -keypass "$KEY_PWD" -signedjar app-release-signed.aab "$AAB" "$ALIAS"
           jarsigner -verify -verbose -certs app-release-signed.aab
           mkdir -p artifacts
