@@ -1,0 +1,80 @@
+name: Android Release (.aab)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["main"]
+
+jobs:
+  build-android-aab:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "npm"
+
+      - name: Setup Java (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "17"
+
+      - name: Install deps & build web
+        run: |
+          if [ -f package-lock.json ]; then npm ci || npm i; else npm i; fi
+          npm run build
+
+      - name: Ensure Capacitor & sync Android
+        run: |
+          npm i -D @capacitor/cli @capacitor/core
+          if [ ! -d android ]; then npx cap add android; fi
+          npx cap sync android
+
+      - name: Gradle bundleRelease (unsigned .aab)
+        working-directory: android
+        run: |
+          chmod +x ./gradlew
+          ./gradlew bundleRelease
+
+      - name: Restore keystore from secret
+        if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+        run: |
+          mkdir -p android/app/keystore
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > android/app/keystore/upload.keystore
+          ls -la android/app/keystore
+
+      - name: Sign .aab with jarsigner
+        if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' && secrets.ANDROID_KEY_ALIAS != '' && secrets.ANDROID_KEYSTORE_PASSWORD != '' && secrets.ANDROID_KEY_PASSWORD != '' }}
+        env:
+          STORE_PWD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_PWD:   ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ALIAS:     ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          AAB="android/app/build/outputs/bundle/release/app-release.aab"
+          test -f "$AAB" || (echo "❌ 未找到 $AAB"; exit 1)
+          # 簽名至新檔（避免覆蓋原檔）
+          jarsigner -keystore android/app/keystore/upload.keystore -storepass "$STORE_PWD" -keypass "$KEY_PWD" -signedjar app-release-signed.aab "$AAB" "$ALIAS"
+          jarsigner -verify -verbose -certs app-release-signed.aab
+          mkdir -p artifacts
+          mv app-release-signed.aab artifacts/app-release-signed.aab
+
+      - name: Prepare artifact (fallback if not signed)
+        if: ${{ !(secrets.ANDROID_KEYSTORE_BASE64 != '' && secrets.ANDROID_KEY_ALIAS != '' && secrets.ANDROID_KEYSTORE_PASSWORD != '' && secrets.ANDROID_KEY_PASSWORD != '') }}
+        run: |
+          SRC="android/app/build/outputs/bundle/release/app-release.aab"
+          test -f "$SRC" || (echo "❌ 未找到 $SRC"; exit 1)
+          mkdir -p artifacts
+          cp "$SRC" artifacts/app-release-unsigned.aab
+          echo "⚠️ 未提供簽名 secrets，已輸出未簽名 .aab（Play Console 不接受，請先簽名）。"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-aab
+          path: artifacts/*
